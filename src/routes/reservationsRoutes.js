@@ -1,0 +1,18 @@
+import express from "express";
+import {
+  getAllReservations,
+  createReservation,
+  getReservationById,
+  updateReservation,
+  deleteReservation,
+} from "../controllers/reservationController.js";
+
+const router = express.Router();
+
+router.get("/", getAllReservations);
+router.post("/", createReservation);
+router.put("/:id", updateReservation);
+router.get("/:id", getReservationById);
+router.delete("/:id", deleteReservation);
+
+export default router;
