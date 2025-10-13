@@ -38,36 +38,82 @@ export const getReservationById = async (req, res) => {
   }
 };
 
+// POST /api/reservations
 export const createReservation = async (req, res) => {
-  const { customer_id, barber_id, service_id, time, date, status } = req.body;
-
-  if (!customer_id || !barber_id || !service_id || !time || !date) {
-    return res.status(400).json({ message: "Semua field harus diisi" });
-  }
-
-  const allowedStatues = ["pending", "ongoing", "done", "cancelled"];
-  if (!allowedStatues.includes(status) && status) {
-    return res.status(400).json({
-      message:
-        "Status tidak valid, harus salah satu dari: " +
-        allowedStatues.join(", "),
-    });
-  }
   try {
-    const newReservation = await Reservation.create({
-      customer_id,
+    const { name, phone, barber_id, service_id, date, time, status } = req.body;
+
+    // Cek apakah customer sudah ada
+    let customer = await Customer.findOne({ where: { phone } });
+
+    // Jika belum ada, buat baru
+    if (!customer) {
+      customer = await Customer.create({ name, phone });
+    }
+
+    if (!customer || !barber_id || !service_id || !time || !date) {
+      return res.status(400).json({ message: "Semua field harus diisi" });
+    }
+
+    const allowedStatues = ["pending", "ongoing", "done", "cancelled"];
+    if (!allowedStatues.includes(status) && status) {
+      return res.status(400).json({
+        message:
+          "Status tidak valid, harus salah satu dari: " +
+          allowedStatues.join(", "),
+      });
+    }
+
+    // Buat reservasi
+    const reservation = await Reservation.create({
+      customer_id: customer.id,
       barber_id,
       service_id,
-      time,
       date,
+      time,
       status,
     });
-    res.status(201).json(newReservation);
+
+    res.status(201).json({
+      message: "Reservasi berhasil dibuat",
+      reservation,
+    });
   } catch (error) {
-    console.error("❌ Gagal tambah reservasi:", error);
-    res.status(500).json({ message: "Gagal menambahkan reservasi" });
+    console.error(error);
+    res.status(500).json({ message: "Gagal membuat reservasi" });
   }
 };
+
+// export const createReservation = async (req, res) => {
+//   const { customer_id, barber_id, service_id, time, date, status } = req.body;
+
+//   if (!customer_id || !barber_id || !service_id || !time || !date) {
+//     return res.status(400).json({ message: "Semua field harus diisi" });
+//   }
+
+//   const allowedStatues = ["pending", "ongoing", "done", "cancelled"];
+//   if (!allowedStatues.includes(status) && status) {
+//     return res.status(400).json({
+//       message:
+//         "Status tidak valid, harus salah satu dari: " +
+//         allowedStatues.join(", "),
+//     });
+//   }
+//   try {
+//     const newReservation = await Reservation.create({
+//       customer_id,
+//       barber_id,
+//       service_id,
+//       time,
+//       date,
+//       status,
+//     });
+//     res.status(201).json(newReservation);
+//   } catch (error) {
+//     console.error("❌ Gagal tambah reservasi:", error);
+//     res.status(500).json({ message: "Gagal menambahkan reservasi" });
+//   }
+// };
 
 export const updateReservation = async (req, res) => {
   const { id } = req.params;
