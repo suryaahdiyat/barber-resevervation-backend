@@ -1,119 +1,193 @@
+// controllers/userController.js
 import bcrypt from "bcrypt";
-import User from "../models/User.js";
+import { Op, where } from "sequelize";
+import { User, Reservation } from "../../models/index.js";
 
+// 🔹 Ambil semua user
 export const getAllUsers = async (req, res) => {
   try {
-    const users = await User.findAll({ order: [["id", "DESC"]] });
+    const users = await User.findAll({
+      attributes: ["id", "name", "email", "phone", "role"],
+      order: [["id", "DESC"]],
+    });
     res.json(users);
-  } catch (error) {
-    console.error("❌ Gagal ambil data:", error);
-    res.status(500).json({ message: "Gagal mengambil data user" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Gagal mengambil data user", error: err.message });
   }
 };
 
-export const createUser = async (req, res) => {
-  // 1. Ambil data dari body request
-  const { name, email, password, role } = req.body;
-
-  if (!name || !email || !password || !role) {
-    return res.status(400).json({ message: "Semua field harus diisi." });
-  }
-
-  const allowedroles = ["kasir", "admin"];
-  if (!allowedroles.includes(role)) {
-    return res
-      .status(400)
-      .json({ message: 'role tidak valid. Harus "kasir" atau "admin".' });
-  }
-
+export const getAllUsersCA = async (req, res) => {
   try {
-    // 2. Cek email yang sudah terdaftar
-    const existingUser = await User.findOne({ where: { email } });
-    if (existingUser) {
-      return res.status(409).json({ message: "Email sudah terdaftar." });
+    const users = await User.findAll({
+      attributes: ["id", "name", "email", "phone", "role"],
+      where: { role: { [Op.or]: ["admin", "cashier"] } },
+      order: [["id", "DESC"]],
+    });
+    res.json(users);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Gagal mengambil data user", error: err.message });
+  }
+};
+
+export const getAllBarbers = async (req, res) => {
+  try {
+    const barbers = await User.findAll({
+      attributes: ["id", "name", "email", "phone", "role"],
+      where: { role: "barber" },
+      order: [["id", "DESC"]],
+    });
+    res.json(barbers);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Gagal mengambil data barber", error: err.message });
+  }
+};
+
+export const getAllCustomers = async (req, res) => {
+  try {
+    const customers = await User.findAll({
+      attributes: ["id", "name", "email", "phone", "role"],
+      include: [
+        {
+          model: Reservation,
+          as: "customer_reservations", // Gunakan alias yang didefinisikan di index.js
+        },
+      ],
+      where: { role: "customer" },
+      order: [["id", "DESC"]],
+    });
+    res.json(customers);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Gagal mengambil data customer", error: err.message });
+  }
+};
+
+// 🔹 Ambil user berdasarkan ID
+export const getUserById = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id, {
+      attributes: ["id", "name", "email", "phone", "role"],
+    });
+    if (!user) return res.status(404).json({ message: "User tidak ditemukan" });
+    res.json(user);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Gagal mengambil data user", error: err.message });
+  }
+};
+
+// 🔹 Tambah user baru
+export const createUser = async (req, res) => {
+  try {
+    const { name, email, phone, password, role } = req.body;
+
+    if (!name || !email || !phone || !password) {
+      return res.status(400).json({ message: "Semua field harus diisi." });
     }
 
-    // 3. Hashing Password (Menggunakan bcrypt)
-    // genSalt(10): Membuat salt dengan cost factor 10 (standar yang baik)
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const allowedroles = ["admin", "cashier", "barber", "customer"];
+    if (!allowedroles.includes(role)) {
+      return res.status(400).json({ message: "role tidak valid." });
+    }
 
-    // 4. Buat dan Simpan User Baru
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]: [{ email: email }, { phone: phone }],
+      },
+    });
+    if (existingUser) {
+      return res
+        .status(409)
+        .json({ message: "Email/ No telp sudah terdaftar." });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = await User.create({
       name,
       email,
-      password: hashedPassword, // Simpan HASHED password
+      phone,
+      password: hashedPassword,
       role,
     });
 
-    // 5. Kirim respons sukses
-    res.status(201).json({
-      message: "User berhasil ditambahkan!",
-      user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-      },
-    });
-  } catch (error) {
-    console.error("❌ Gagal menambahkan user:", error);
-    res.status(500).json({ message: "Gagal menambahkan data user" });
+    res.status(201).json({ message: "User berhasil dibuat", user: newUser });
+  } catch (err) {
+    res.status(500).json({ message: "Gagal membuat user", error: err.message });
   }
 };
 
-export const getUserById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const user = await User.findByPk(id);
-
-    if (!user) {
-      return res.status(404).json({ message: "User tidak ditemukan" });
-    }
-    res.json(user);
-  } catch (error) {
-    console.error("❌ Gagal ambil data:", error);
-    res.status(500).json({ message: "Gagal mengambil data user" });
-  }
-};
-
+// 🔹 Update user
 export const updateUser = async (req, res) => {
-  const { id } = req.params;
-  const { name, email, password, role } = req.body;
-
   try {
-    const user = await User.findByPk(id);
-    if (!user) {
-      return res.status(404).json({ message: "User tidak ditemukan" });
-    }
+    const { name, email, phone, password, role } = req.body;
+    const user = await User.findByPk(req.params.id);
 
-    user.name = name || user.name;
-    user.email = email || user.email;
-    user.role = role || user.role;
-    user.password = password
-      ? await bcrypt.hash(password, await bcrypt.genSalt(10))
-      : user.password;
-    await user.save();
+    if (!user) return res.status(404).json({ message: "User tidak ditemukan" });
+
+    await user.update({
+      name,
+      email,
+      phone,
+      role,
+      ...(password ? { password: await bcrypt.hash(password, 10) } : {}),
+    });
 
     res.json({ message: "User berhasil diperbarui", user });
-  } catch (error) {
-    console.error("❌ Gagal mengupdate user:", error);
-    res.status(500).json({ message: "Gagal mengupdate data user" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Gagal memperbarui user", error: err.message });
   }
 };
 
+// 🔹 Hapus user
 export const deleteUser = async (req, res) => {
   try {
-    const { id } = req.params;
-    const user = await User.findByPk(id);
+    const user = await User.findByPk(req.params.id);
+    if (!user) return res.status(404).json({ message: "User tidak ditemukan" });
 
-    if (!user) {
-      return res.status(404).json({ message: "User tidak ditemukan" });
-    }
     await user.destroy();
     res.json({ message: "User berhasil dihapus" });
-  } catch (error) {
-    console.error("❌ Gagal menghapus user:", error);
-    res.status(500).json({ message: "Gagal menghapus data user" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Gagal menghapus user", error: err.message });
+  }
+};
+
+// 🔹 Login sederhana
+export const loginUser = async (req, res) => {
+  try {
+    const { identifier, password } = req.body; // identifier bisa email atau phone
+
+    const user = await User.findOne({
+      where: {
+        [Op.or]: [{ email: identifier }, { phone: identifier }],
+      },
+    });
+
+    if (!user) return res.status(404).json({ message: "User tidak ditemukan" });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Password salah" });
+
+    res.json({
+      message: "Login berhasil",
+      user: {
+        id: user.id,
+        name: user.name,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Gagal login", error: err.message });
   }
 };

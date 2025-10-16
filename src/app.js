@@ -1,13 +1,11 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import sequelize from "./config/db.js";
-import authRoutes from "./routes/authRoutes.js";
-import customerRoutes from "./routes/customersRoutes.js";
-import barberRoutes from "./routes/barbersRoutes.js";
-import userRoutes from "./routes/usersRoutes.js";
-import servicesRoutes from "./routes/servicesRoutes.js";
-import reservationsRoute from "./routes/reservationsRoutes.js";
+import sequelize from "../config/db.js";
+import userRoutes from "./routes/userRoutes.js";
+import serviceRoutes from "./routes/serviceRoutes.js";
+import reservationRoute from "./routes/reservationRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -19,13 +17,10 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.send("API Barber Reservation aktif 🚀");
 });
-
-app.use("/api/auth", authRoutes);
-app.use("/api/customers", customerRoutes);
-app.use("/api/barbers", barberRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/services", servicesRoutes);
-app.use("/api/reservations", reservationsRoute);
+app.use("/api/services", serviceRoutes);
+app.use("/api/reservations", reservationRoute);
+app.use("/api/payments", paymentRoutes);
 
 // tes koneksi database
 (async () => {

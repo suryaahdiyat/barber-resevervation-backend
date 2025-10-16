@@ -1,170 +1,224 @@
-import { Reservation, Customer, Barber, Service } from "../models/index.js";
+import { Reservation, User, Service } from "../../models/index.js";
+import { Op } from "sequelize";
 
+// fungsi bantu: deteksi waktu yang bentrok
+const isOverlapping = (startA, endA, startB, endB) => {
+  return startA < endB && startB < endA;
+};
+
+// 🟢 Ambil semua reservasi
 export const getAllReservations = async (req, res) => {
   try {
     const reservations = await Reservation.findAll({
+      attributes: ["id", "time", "date", "status", "note", "created_at"],
       include: [
-        { model: Customer, as: "customer" },
-        { model: Barber, as: "barber" },
-        { model: Service, as: "service" },
+        { model: User, as: "customer", attributes: ["id", "name", "phone"] },
+        { model: User, as: "barber", attributes: ["id", "name"] },
+        {
+          model: Service,
+          as: "service",
+          attributes: ["id", "name", "duration", "price"],
+        },
       ],
-      order: [["id", "DESC"]],
+      order: [
+        ["date", "DESC"],
+        ["time", "DESC"],
+      ],
     });
+
     res.json(reservations);
-  } catch (error) {
-    console.error("❌ Gagal ambil data:", error);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Gagal mengambil data reservasi" });
   }
 };
 
+// 🟢 Ambil satu reservasi berdasarkan ID
 export const getReservationById = async (req, res) => {
   try {
     const { id } = req.params;
     const reservation = await Reservation.findByPk(id, {
       include: [
-        { model: Customer, as: "customer" },
-        { model: Barber, as: "barber" },
-        { model: Service, as: "service" },
+        { model: User, as: "customer", attributes: ["id", "name", "phone"] },
+        { model: User, as: "barber", attributes: ["id", "name"] },
+        {
+          model: Service,
+          as: "service",
+          attributes: ["id", "name", "duration", "price"],
+        },
       ],
     });
 
     if (!reservation) {
       return res.status(404).json({ message: "Reservasi tidak ditemukan" });
     }
+
     res.json(reservation);
-  } catch (error) {
-    console.error("❌ Gagal ambil data:", error);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Gagal mengambil data reservasi" });
   }
 };
 
-// POST /api/reservations
+// 🟢 Tambah reservasi baru
 export const createReservation = async (req, res) => {
   try {
-    const { name, phone, barber_id, service_id, date, time, status } = req.body;
+    const { customer_id, barber_id, service_id, date, time, note } = req.body;
 
-    // Cek apakah customer sudah ada
-    let customer = await Customer.findOne({ where: { phone } });
-
-    // Jika belum ada, buat baru
-    if (!customer) {
-      customer = await Customer.create({ name, phone });
+    if (!customer_id || !barber_id || !service_id || !date || !time) {
+      return res.status(400).json({ message: "Semua field wajib diisi." });
     }
 
-    if (!customer || !barber_id || !service_id || !time || !date) {
-      return res.status(400).json({ message: "Semua field harus diisi" });
-    }
+    // ambil durasi dari service
+    const service = await Service.findByPk(service_id);
+    if (!service)
+      return res.status(404).json({ message: "Service tidak ditemukan." });
 
-    const allowedStatues = ["pending", "ongoing", "done", "cancelled"];
-    if (!allowedStatues.includes(status) && status) {
+    const duration = service.duration;
+    const startNew = new Date(`${date}T${time}`);
+    const endNew = new Date(startNew.getTime() + duration * 60000);
+
+    // ambil semua reservasi barber di tanggal itu
+    const existingReservations = await Reservation.findAll({
+      where: {
+        barber_id,
+        date,
+        status: { [Op.in]: ["pending", "ongoing", "confirmed"] },
+      },
+      include: [{ model: Service, as: "service" }],
+    });
+
+    // cek overlap
+    const conflict = existingReservations.some((r) => {
+      const startExisting = new Date(`${r.date}T${r.time}`);
+      const endExisting = new Date(
+        startExisting.getTime() + r.service.duration * 60000
+      );
+      return isOverlapping(startExisting, endExisting, startNew, endNew);
+    });
+
+    if (conflict) {
       return res.status(400).json({
-        message:
-          "Status tidak valid, harus salah satu dari: " +
-          allowedStatues.join(", "),
+        message: "Barber sudah memiliki reservasi di waktu tersebut.",
       });
     }
 
-    // Buat reservasi
-    const reservation = await Reservation.create({
-      customer_id: customer.id,
+    // simpan reservasi baru
+    const newReservation = await Reservation.create({
+      customer_id,
       barber_id,
       service_id,
       date,
       time,
-      status,
+      status: "pending",
+      note,
     });
 
-    res.status(201).json({
-      message: "Reservasi berhasil dibuat",
-      reservation,
-    });
-  } catch (error) {
-    console.error(error);
+    res.status(201).json(newReservation);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Gagal membuat reservasi" });
   }
 };
 
-// export const createReservation = async (req, res) => {
-//   const { customer_id, barber_id, service_id, time, date, status } = req.body;
-
-//   if (!customer_id || !barber_id || !service_id || !time || !date) {
-//     return res.status(400).json({ message: "Semua field harus diisi" });
-//   }
-
-//   const allowedStatues = ["pending", "ongoing", "done", "cancelled"];
-//   if (!allowedStatues.includes(status) && status) {
-//     return res.status(400).json({
-//       message:
-//         "Status tidak valid, harus salah satu dari: " +
-//         allowedStatues.join(", "),
-//     });
-//   }
-//   try {
-//     const newReservation = await Reservation.create({
-//       customer_id,
-//       barber_id,
-//       service_id,
-//       time,
-//       date,
-//       status,
-//     });
-//     res.status(201).json(newReservation);
-//   } catch (error) {
-//     console.error("❌ Gagal tambah reservasi:", error);
-//     res.status(500).json({ message: "Gagal menambahkan reservasi" });
-//   }
-// };
-
-export const updateReservation = async (req, res) => {
-  const { id } = req.params;
-  const { barber_id, service_id, time, date, status } = req.body;
-
-  const allowedStatues = ["pending", "ongoing", "done", "cancelled"];
-  if (!allowedStatues.includes(status) && status) {
-    return res.status(400).json({
-      message:
-        "Status tidak valid, harus salah satu dari: " +
-        allowedStatues.join(", "),
-    });
-  }
-
+// 🟢 Update status reservasi
+export const updateReservationStatus = async (req, res) => {
   try {
-    const reservation = await Reservation.findByPk(id);
-    if (!reservation) {
-      return res.status(404).json({ message: "Reservasi tidak ditemukan" });
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatus = [
+      "pending",
+      "confirmed",
+      "ongoing",
+      "done",
+      "cancelled",
+    ];
+    if (!validStatus.includes(status)) {
+      return res.status(400).json({ message: "Status tidak valid." });
     }
 
-    // reservation.customer_id = reservation.cu
-    reservation.barber_id = barber_id || reservation.barber_id;
-    reservation.service_id = service_id || reservation.service_id;
-    reservation.time = time || reservation.time;
-    reservation.date = date || reservation.date;
-    reservation.status = status || reservation.status;
+    const reservation = await Reservation.findByPk(id);
+    if (!reservation)
+      return res.status(404).json({ message: "Reservasi tidak ditemukan." });
+
+    reservation.status = status;
     await reservation.save();
 
-    res.json({ message: "Reservasi berhasil diperbarui", reservation });
-  } catch (error) {
-    console.error("❌ Gagal mengupdate reservasi:", error);
-    res.status(500).json({ message: "Gagal mengupdate reservasi" });
+    res.json({ message: "Status reservasi berhasil diperbarui." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Gagal memperbarui status reservasi" });
   }
 };
 
+// 🟢 Hapus reservasi
 export const deleteReservation = async (req, res) => {
   try {
     const { id } = req.params;
-    // const reservation = await Reservation.findByPk(id)
+    const reservation = await Reservation.findByPk(id);
+    if (!reservation)
+      return res.status(404).json({ message: "Reservasi tidak ditemukan." });
 
-    const deletedRows = await Reservation.destroy({
-      where: { id: id },
+    await reservation.destroy();
+    res.json({ message: "Reservasi berhasil dihapus." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Gagal menghapus reservasi" });
+  }
+};
+
+// 🟢 Cek ketersediaan barber
+export const getAvailableBarbers = async (req, res) => {
+  try {
+    const { date, time, service_id } = req.query;
+
+    if (!date || !time || !service_id)
+      return res
+        .status(400)
+        .json({ message: "Tanggal, waktu, dan service wajib diisi" });
+
+    const service = await Service.findByPk(service_id);
+    if (!service)
+      return res.status(404).json({ message: "Service tidak ditemukan" });
+
+    const duration = service.duration;
+    const startNew = new Date(`${date}T${time}`);
+    const endNew = new Date(startNew.getTime() + duration * 60000);
+
+    const barbers = await User.findAll({
+      where: { role: "barber" },
+      include: [
+        {
+          model: Reservation,
+          as: "barber_reservations",
+          required: false,
+          where: { date },
+          include: [{ model: Service, as: "service" }],
+        },
+      ],
     });
 
-    if (deletedRows === 0) {
-      return res.status(404).json({ message: "Reservasi tidak ditemukan" });
-    }
+    const available = barbers.filter((barber) => {
+      if (!barber.barber_reservations.length) return true;
 
-    res.json({ message: "Reservasi berhasil dihapus" });
-  } catch (error) {
-    console.error("❌ Gagal menghapus reservasi:", error);
-    res.status(500).json({ message: "Gagal menghapus reservasi" });
+      const conflict = barber.barber_reservations.some((r) => {
+        const startExisting = new Date(`${r.date}T${r.time}`);
+        const endExisting = new Date(
+          startExisting.getTime() + r.service.duration * 60000
+        );
+        return (
+          (r.status === "pending" || r.status === "ongoing") &&
+          isOverlapping(startExisting, endExisting, startNew, endNew)
+        );
+      });
+
+      return !conflict;
+    });
+
+    res.json(available);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Gagal memeriksa ketersediaan barber" });
   }
 };
