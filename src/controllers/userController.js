@@ -87,10 +87,22 @@ export const getUserById = async (req, res) => {
 // 🔹 Tambah user baru
 export const createUser = async (req, res) => {
   try {
-    const { name, email, phone, password, role } = req.body;
+    const { name, email, phone, role } = req.body;
 
-    if (!name || !email || !phone || !password) {
-      return res.status(400).json({ message: "Semua field harus diisi." });
+    let condition = [];
+
+    if (email) {
+      condition.push({ email });
+    }
+    if (phone) {
+      condition.push({ phone });
+    }
+
+    if (!name || condition.length === 0) {
+      return res.status(400).json({
+        message:
+          "Nama dan minimal salah satu dari email atau nomor telepon harus diisi.",
+      });
     }
 
     const allowedroles = ["admin", "cashier", "barber", "customer"];
@@ -100,7 +112,7 @@ export const createUser = async (req, res) => {
 
     const existingUser = await User.findOne({
       where: {
-        [Op.or]: [{ email: email }, { phone: phone }],
+        [Op.or]: condition,
       },
     });
     if (existingUser) {
@@ -109,6 +121,7 @@ export const createUser = async (req, res) => {
         .json({ message: "Email/ No telp sudah terdaftar." });
     }
 
+    const password = "12345678";
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = await User.create({
       name,
@@ -120,6 +133,7 @@ export const createUser = async (req, res) => {
 
     res.status(201).json({ message: "User berhasil dibuat", user: newUser });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Gagal membuat user", error: err.message });
   }
 };
@@ -131,6 +145,28 @@ export const updateUser = async (req, res) => {
     const user = await User.findByPk(req.params.id);
 
     if (!user) return res.status(404).json({ message: "User tidak ditemukan" });
+
+    let condition = [];
+
+    if (email) {
+      condition.push({ email });
+    }
+    if (phone) {
+      condition.push({ phone });
+    }
+    // Cek apakah email/phone sudah digunakan oleh user lain
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]: condition,
+        id: { [Op.ne]: req.params.id }, // pastikan bukan dirinya sendiri
+      },
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        message: "Email atau No Telp sudah digunakan oleh user lain.",
+      });
+    }
 
     await user.update({
       name,
