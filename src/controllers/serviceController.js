@@ -1,5 +1,6 @@
 // controllers/serviceController.js
 import { Service } from "../../models/index.js";
+import { Op, where } from "sequelize";
 
 // 🔹 Ambil semua service
 export const getAllServices = async (req, res) => {
@@ -26,6 +27,37 @@ export const getServiceById = async (req, res) => {
   } catch (err) {
     res.status(500).json({
       message: "Gagal mengambil data service",
+      error: err.message,
+    });
+  }
+};
+
+export const searchService = async (req, res) => {
+  try {
+    const { query } = req.query; // ambil dari ?query=...
+    if (!query || query.trim() === "") {
+      return res
+        .status(400)
+        .json({ message: "Parameter pencarian tidak boleh kosong" });
+    }
+
+    const services = await Service.findAll({
+      where: {
+        [Op.or]: [
+          { name: { [Op.like]: `%${query}%` } },
+          { description: { [Op.like]: `%${query}%` } },
+        ],
+      },
+      attributes: ["id", "name", "price", "description"],
+    });
+
+    if (services.length === 0)
+      return res.status(404).json({ message: "Tidak ada service yang cocok" });
+
+    res.json(services);
+  } catch (err) {
+    res.status(500).json({
+      message: "Gagal melakukan pencarian service",
       error: err.message,
     });
   }

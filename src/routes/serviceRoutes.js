@@ -4,6 +4,7 @@ import {
   getAllServices,
   createService,
   getServiceById,
+  searchService,
   updateService,
   deleteService,
 } from "../controllers/serviceController.js";
@@ -13,6 +14,7 @@ const router = express.Router();
 
 router.get("/", getAllServices);
 router.post("/", createService);
+router.get("/search", searchService);
 router.get("/:id", getServiceById);
 router.put("/:id", updateService);
 router.delete("/:id", deleteService);

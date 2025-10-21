@@ -6,6 +6,7 @@ import {
   getAllBarbers,
   getAllCustomers,
   getUserById,
+  searchUser,
   createUser,
   updateUser,
   deleteUser,
@@ -19,6 +20,7 @@ router.get("/", getAllUsers);
 router.get("/ca", getAllUsersCA);
 router.get("/barbers", getAllBarbers);
 router.get("/customers", getAllCustomers);
+router.get("/search", searchUser);
 router.get("/:id", getUserById);
 router.post("/", createUser);
 router.put("/:id", updateUser);

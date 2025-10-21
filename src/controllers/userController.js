@@ -1,7 +1,7 @@
 // controllers/userController.js
 import bcrypt from "bcrypt";
 import { Op, where } from "sequelize";
-import { User, Reservation } from "../../models/index.js";
+import { User, Reservation, Service } from "../../models/index.js";
 
 // 🔹 Ambil semua user
 export const getAllUsers = async (req, res) => {
@@ -74,13 +74,59 @@ export const getUserById = async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id, {
       attributes: ["id", "name", "email", "phone", "role"],
+      include: [
+        {
+          model: Reservation,
+          as: "customer_reservations",
+          attributes: ["id", "date", "time", "status"],
+          include: [
+            {
+              model: Service,
+              as: "service",
+              attributes: ["name"],
+            },
+          ],
+        },
+      ],
     });
-    if (!user) return res.status(404).json({ message: "User tidak ditemukan" });
+    if (!user)
+      return res.status(404).json({ message: "User tidak ditemukan123" });
     res.json(user);
   } catch (err) {
     res
       .status(500)
       .json({ message: "Gagal mengambil data user", error: err.message });
+  }
+};
+
+export const searchUser = async (req, res) => {
+  try {
+    const { query } = req.query; // ambil dari ?query=...
+    if (!query || query.trim() === "") {
+      return res
+        .status(400)
+        .json({ message: "Parameter pencarian tidak boleh kosong" });
+    }
+
+    const users = await User.findAll({
+      where: {
+        [Op.or]: [
+          { name: { [Op.like]: `%${query}%` } },
+          { email: { [Op.like]: `%${query}%` } },
+          { phone: { [Op.like]: `%${query}%` } },
+        ],
+      },
+      attributes: ["id", "name", "email", "phone"],
+    });
+
+    if (users.length === 0)
+      return res.status(404).json({ message: "Tidak ada user yang cocok" });
+
+    res.json(users);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Gagal melakukan pencarian user", error: err.message });
   }
 };
 
