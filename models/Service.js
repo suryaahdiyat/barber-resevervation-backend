@@ -12,6 +12,10 @@ export default (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      picture: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       price: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,

@@ -1,5 +1,8 @@
-import { Reservation, User, Service } from "../../models/index.js";
+import { Reservation, User, Service, Payment } from "../../models/index.js";
 import { Op } from "sequelize";
+import bcrypt from "bcrypt";
+import fs from "fs";
+import path from "path";
 
 // fungsi bantu: deteksi waktu yang bentrok
 const isOverlapping = (startA, endA, startB, endB) => {
@@ -7,17 +10,33 @@ const isOverlapping = (startA, endA, startB, endB) => {
 };
 
 // 🟢 Ambil semua reservasi
-export const getAllReservations = async (req, res) => {
+export const getReservations = async (req, res) => {
   try {
+    const { status, date } = req.query;
+    const whereCondition = {};
+
+    if (status && status !== "all") whereCondition.status = status;
+    if (date) whereCondition.date = date;
+
     const reservations = await Reservation.findAll({
+      where: whereCondition,
       attributes: ["id", "time", "date", "status", "note", "created_at"],
       include: [
-        { model: User, as: "customer", attributes: ["id", "name", "phone"] },
+        {
+          model: User,
+          as: "customer",
+          attributes: ["id", "name", "phone", "email"],
+        },
         { model: User, as: "barber", attributes: ["id", "name"] },
         {
           model: Service,
           as: "service",
           attributes: ["id", "name", "duration", "price"],
+        },
+        {
+          model: Payment,
+          as: "payment",
+          attributes: ["id", "method", "status"],
         },
       ],
       order: [
@@ -60,13 +79,106 @@ export const getReservationById = async (req, res) => {
   }
 };
 
+export const searchReservation = async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query || query.trim() === "") {
+      return res
+        .status(400)
+        .json({ message: "Parameter pencarian tidak boleh kosong" });
+    }
+
+    const reservation = await Reservation.findAll({
+      where: {
+        [Op.or]: [
+          { "$customer.name$": { [Op.like]: `%${query}%` } },
+          { "$customer.email$": { [Op.like]: `%${query}%` } },
+          { "$customer.phone$": { [Op.like]: `%${query}%` } },
+        ],
+      },
+      attributes: ["id", "time", "date", "status", "note", "created_at"],
+      include: [
+        {
+          model: User,
+          as: "customer",
+          attributes: ["id", "name", "phone", "email"],
+        },
+        { model: User, as: "barber", attributes: ["id", "name"] },
+        {
+          model: Service,
+          as: "service",
+          attributes: ["id", "name", "duration", "price"],
+        },
+      ],
+      order: [
+        ["date", "DESC"],
+        ["time", "DESC"],
+      ],
+    });
+
+    if (reservation.length === 0) {
+      return res.status(404).json({ message: "Reservasi tidak ditemukan" });
+    }
+
+    res.json(reservation);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Gagal melakukan pencarian user", error: err.message });
+  }
+};
+
 // 🟢 Tambah reservasi baru
 export const createReservation = async (req, res) => {
   try {
-    const { customer_id, barber_id, service_id, date, time, note } = req.body;
+    const {
+      name,
+      email,
+      phone,
+      barber_id,
+      service_id,
+      date,
+      time,
+      note,
+      payment_method,
+    } = req.body;
 
-    if (!customer_id || !barber_id || !service_id || !date || !time) {
+    let condition = [];
+
+    if (email) {
+      condition.push({ email });
+    }
+    if (phone) {
+      condition.push({ phone });
+    }
+
+    if (condition.length === 0) {
+      return res.status(400).json({
+        message:
+          "Minimal salah satu dari email atau nomor telepon harus diisi.",
+      });
+    }
+
+    if (!name || !barber_id || !service_id || !date || !time) {
       return res.status(400).json({ message: "Semua field wajib diisi." });
+    }
+
+    let user = await User.findOne({
+      where: {
+        [Op.or]: condition,
+      },
+    });
+
+    if (!user) {
+      const password = "12345678";
+      const hashedPassword = await bcrypt.hash(password, 10);
+      user = await User.create({
+        name,
+        email,
+        phone,
+        password: hashedPassword,
+        role: "customer",
+      });
     }
 
     // ambil durasi dari service
@@ -105,13 +217,19 @@ export const createReservation = async (req, res) => {
 
     // simpan reservasi baru
     const newReservation = await Reservation.create({
-      customer_id,
+      customer_id: user.id,
       barber_id,
       service_id,
       date,
       time,
       status: "pending",
       note,
+    });
+
+    await Payment.create({
+      reservation_id: newReservation.id,
+      amount: service.price,
+      method: payment_method,
     });
 
     res.status(201).json(newReservation);
@@ -153,15 +271,75 @@ export const updateReservationStatus = async (req, res) => {
 };
 
 // 🟢 Hapus reservasi
+// export const deleteReservation = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const reservation = await Reservation.findByPk(id, {
+//       include: [{ model: Payment, as: "payment" }],
+//     });
+
+//     if (!reservation)
+//       return res.status(404).json({ message: "Reservasi tidak ditemukan." });
+
+//     const payment = await Payment.findByPk(reservation.payment.id);
+
+//     if (!payment)
+//       return res.status(404).json({ message: "Pembayaran tidak ditemukan" });
+
+//     // Hapus gambar dari folder
+//     if (payment.proof) {
+//       const filePath = path.join(process.cwd(), "uploads", payment.proof);
+//       if (fs.existsSync(filePath)) {
+//         fs.unlinkSync(filePath);
+//         console.log("🗑️ File gambar dihapus:", payment.proof);
+//       }
+//     }
+
+//     await reservation.destroy();
+//     await payment.destroy();
+//     res.json({ message: "Reservasi berhasil dihapus." });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Gagal menghapus reservasi" });
+//   }
+// };
+
 export const deleteReservation = async (req, res) => {
   try {
     const { id } = req.params;
-    const reservation = await Reservation.findByPk(id);
+
+    // Ambil reservasi beserta payment-nya
+    const reservation = await Reservation.findByPk(id, {
+      include: [{ model: Payment, as: "payment" }],
+    });
+
     if (!reservation)
       return res.status(404).json({ message: "Reservasi tidak ditemukan." });
 
+    const payment = reservation.payment;
+
+    if (payment) {
+      // Hapus gambar bukti pembayaran (jika ada)
+      if (payment.proof) {
+        const filePath = path.join(process.cwd(), "uploads", payment.proof);
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log("🗑️ File gambar dihapus:", payment.proof);
+          }
+        } catch (err) {
+          console.warn("⚠️ Gagal menghapus file:", err.message);
+        }
+      }
+
+      // Hapus data payment
+      await payment.destroy();
+    }
+
+    // Hapus data reservasi
     await reservation.destroy();
-    res.json({ message: "Reservasi berhasil dihapus." });
+
+    res.json({ message: "Reservasi (beserta pembayaran) berhasil dihapus." });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Gagal menghapus reservasi" });

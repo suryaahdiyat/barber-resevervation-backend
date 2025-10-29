@@ -1,6 +1,8 @@
 // controllers/serviceController.js
 import { Service } from "../../models/index.js";
 import { Op, where } from "sequelize";
+import fs from "fs";
+import path from "path";
 
 // 🔹 Ambil semua service
 export const getAllServices = async (req, res) => {
@@ -67,6 +69,8 @@ export const searchService = async (req, res) => {
 export const createService = async (req, res) => {
   try {
     const { name, price, duration, description } = req.body;
+    // const picture = req.file ? req.file.filename : null;
+    const picture = req.file ? `services/${req.file.filename}` : null;
 
     if (!name || !price || !duration) {
       return res.status(400).json({ message: "Semua field harus diisi." });
@@ -74,9 +78,10 @@ export const createService = async (req, res) => {
 
     const newService = await Service.create({
       name,
+      description,
       price,
       duration,
-      description,
+      picture,
     });
 
     res
@@ -99,11 +104,38 @@ export const updateService = async (req, res) => {
     if (!service)
       return res.status(404).json({ message: "Service tidak ditemukan" });
 
+    // Kalau user upload gambar baru
+    if (req.file) {
+      // Hapus gambar lama (jika ada)
+      if (service.picture) {
+        const oldPath = path.join(process.cwd(), "uploads", service.picture);
+        if (fs.existsSync(oldPath)) {
+          fs.unlinkSync(oldPath);
+          console.log("🗑️ Gambar lama dihapus:", service.picture);
+        }
+      }
+
+      // Simpan path baru
+      service.picture = `services/${req.file.filename}`;
+      // service.picture = `uploads/services/${req.file.filename}`;
+    }
+
+    //hapus jika picture == null
+    if (req.body.picture === "null" && service.picture) {
+      const oldPath = path.join(process.cwd(), "uploads", service.picture);
+      if (fs.existsSync(oldPath)) {
+        fs.unlinkSync(oldPath);
+        console.log("🗑️ Gambar dihapus oleh user:", service.picture);
+      }
+      service.picture = null;
+    }
+
     await service.update({
       name,
       price,
       duration,
       description,
+      picture: service.picture,
     });
 
     res.json({ message: "Service berhasil diperbarui", service });
@@ -122,6 +154,15 @@ export const deleteService = async (req, res) => {
 
     if (!service)
       return res.status(404).json({ message: "Service tidak ditemukan" });
+
+    // Hapus gambar dari folder
+    if (service.picture) {
+      const filePath = path.join(process.cwd(), "uploads", service.picture);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log("🗑️ File gambar dihapus:", service.picture);
+      }
+    }
 
     await service.destroy();
     res.json({ message: "Service berhasil dihapus" });

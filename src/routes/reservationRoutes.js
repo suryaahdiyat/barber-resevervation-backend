@@ -1,6 +1,7 @@
 import express from "express";
 import {
-  getAllReservations,
+  getReservations,
+  searchReservation,
   getReservationById,
   createReservation,
   updateReservationStatus,
@@ -10,7 +11,8 @@ import {
 
 const router = express.Router();
 
-router.get("/", getAllReservations);
+router.get("/", getReservations);
+router.get("/search", searchReservation);
 router.get("/:id", getReservationById);
 router.post("/", createReservation);
 router.put("/:id/status", updateReservationStatus);

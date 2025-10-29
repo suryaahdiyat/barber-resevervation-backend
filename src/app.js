@@ -22,6 +22,11 @@ app.use("/api/services", serviceRoutes);
 app.use("/api/reservations", reservationRoute);
 app.use("/api/payments", paymentRoutes);
 
+//agar uploads bisa diakses secara public
+app.use("/uploads", express.static("uploads"));
+
+// app.use(require("method-override")("_method"));
+
 // tes koneksi database
 (async () => {
   try {

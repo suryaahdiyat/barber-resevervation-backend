@@ -1,5 +1,6 @@
 import { Payment, Reservation, User, Service } from "../../models/index.js";
-
+import fs from "fs";
+import path from "path";
 /**
  * Membuat pembayaran untuk reservasi tertentu
  * Biasanya dilakukan oleh pelanggan
@@ -103,6 +104,89 @@ export const getPaymentById = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Gagal mengambil detail pembayaran" });
+  }
+};
+
+export const getPaymentByReservationId = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const payment = await Payment.findOne({
+      where: { reservation_id: id },
+      include: [
+        {
+          model: Reservation,
+          as: "reservation",
+          include: [
+            {
+              model: User,
+              as: "customer",
+              attributes: ["id", "name", "phone"],
+            },
+            {
+              model: Service,
+              as: "service",
+              attributes: ["id", "name", "price"],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!payment) {
+      return res.status(404).json({ message: "Pembayaran tidak ditemukan" });
+    }
+
+    res.json(payment);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Gagal mengambil detail pembayaran" });
+  }
+};
+
+export const updatePaymentByAdmin = async (req, res) => {
+  try {
+    // const { id } = req.params;
+    const { payment_method } = req.body;
+
+    const payment = await Payment.findByPk(req.params.id);
+    if (!payment) {
+      return res.status(404).json({ message: "Pembayaran tidak ditemukan " });
+    }
+
+    if (req.file) {
+      if (payment.proof) {
+        const oldPath = path.join(process.cwd(), "uploads", payment.proof);
+        if (fs.existsSync(oldPath)) {
+          fs.unlinkSync(oldPath);
+          console.log("🗑️ Gambar lama dihapus:", payment.proof);
+        }
+      }
+      // Simpan path baru
+      payment.proof = `payments/${req.file.filename}`;
+    }
+
+    //hapus jika proof == null
+    if (req.body.proof === "null" && payment.proof) {
+      const oldPath = path.join(process.cwd(), "uploads", payment.proof);
+      if (fs.existsSync(oldPath)) {
+        fs.unlinkSync(oldPath);
+        console.log("🗑️ Gambar dihapus oleh user:", payment.proof);
+      }
+      payment.proof = null;
+    }
+
+    await payment.update({
+      method: payment_method,
+      proof: payment.proof,
+    });
+
+    res.json({ message: "Pembayaran berhasil diperbarui", payment });
+  } catch (err) {
+    res.status(500).json({
+      message: "Gagal memperbarui pembayaran",
+      error: err.message,
+    });
   }
 };
 
