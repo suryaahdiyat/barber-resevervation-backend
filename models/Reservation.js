@@ -13,7 +13,15 @@ export default (sequelize) => {
         allowNull: false,
       },
       status: {
-        type: DataTypes.ENUM("pending", "ongoing", "confirmed", "cancelled"),
+        type: DataTypes.ENUM(
+          "pending",
+          "ongoing",
+          "confirmed",
+          "cancelled",
+          "pre_booked",
+          "complete",
+          "need_admin_review"
+        ),
         allowNull: true,
         defaultValue: "pending",
       },

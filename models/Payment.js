@@ -17,7 +17,13 @@ export default (sequelize) => {
         allowNull: true,
       },
       status: {
-        type: DataTypes.ENUM("waiting", "accepted", "rejected"),
+        type: DataTypes.ENUM(
+          "waiting",
+          "accepted",
+          "rejected",
+          "refund_pending",
+          "refunded"
+        ),
         allowNull: true,
         defaultValue: "waiting",
       },

@@ -26,6 +26,11 @@ export default (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      is_present: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       role: {
         type: DataTypes.ENUM("admin", "cashier", "barber", "customer"),
         allowNull: false,

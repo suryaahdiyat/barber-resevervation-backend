@@ -3,6 +3,8 @@ import {
   getReservations,
   searchReservation,
   getReservationById,
+  getReservationsByUserId,
+  getReservationsByBarberId,
   createReservation,
   updateReservationStatus,
   deleteReservation,
@@ -13,6 +15,8 @@ const router = express.Router();
 
 router.get("/", getReservations);
 router.get("/search", searchReservation);
+router.get("/user/:id", getReservationsByUserId);
+router.get("/barber/:id", getReservationsByBarberId);
 router.get("/:id", getReservationById);
 router.post("/", createReservation);
 router.put("/:id/status", updateReservationStatus);

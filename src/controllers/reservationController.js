@@ -1,9 +1,14 @@
+import {
+  createNotification,
+  notifyAdminNewReservation,
+  notifyReservationAccepted,
+  notifyReservationRejected,
+} from "../utils/notificationHelper.js";
 import { Reservation, User, Service, Payment } from "../../models/index.js";
-import { Op } from "sequelize";
+import { Op, where } from "sequelize";
 import bcrypt from "bcrypt";
 import fs from "fs";
 import path from "path";
-
 // fungsi bantu: deteksi waktu yang bentrok
 const isOverlapping = (startA, endA, startB, endB) => {
   return startA < endB && startB < endA;
@@ -76,6 +81,112 @@ export const getReservationById = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Gagal mengambil data reservasi" });
+  }
+};
+
+export const getReservationsByUserId = async (req, res) => {
+  try {
+    const { status, date } = req.query;
+    const reservationWhere = {};
+    const paymentWhere = {};
+    // const id = req.params.id;
+
+    if (status && status !== "all") paymentWhere.status = status;
+    if (date) reservationWhere.date = date;
+
+    const reservations = await Reservation.findAll({
+      where: {
+        customer_id: req.params.id,
+        ...reservationWhere,
+      },
+      // attributes: ["id", "time", "date", "status", "note", "created_at"],
+      include: [
+        {
+          model: User,
+          as: "customer",
+          attributes: ["id", "name", "phone", "email"],
+        },
+        { model: User, as: "barber", attributes: ["id", "name"] },
+        {
+          model: Service,
+          as: "service",
+          attributes: ["id", "name", "duration", "price"],
+        },
+        {
+          model: Payment,
+          as: "payment",
+          where: paymentWhere,
+          attributes: ["id", "method", "status"],
+        },
+      ],
+      order: [
+        ["date", "DESC"],
+        ["time", "DESC"],
+      ],
+      // where: id,
+    });
+    res.json(reservations);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Gagal mengambil data reservasi" });
+  }
+};
+
+// get barber reservation
+export const getReservationsByBarberId = async (req, res) => {
+  try {
+    const { status, date } = req.query;
+
+    const reservationWhere = {};
+
+    if (date) reservationWhere.date = date;
+
+    if (status && status !== "all") reservationWhere.status = status;
+
+    const reservations = await Reservation.findAll({
+      where: {
+        barber_id: req.params.id,
+        [Op.not]: {
+          status: "cancelled",
+        },
+        ...reservationWhere,
+      },
+      // attributes: ["id", "time", "date", "status", "note", "created_at"],
+      include: [
+        {
+          model: User,
+          as: "customer",
+          attributes: ["id", "name", "phone", "email"],
+        },
+        { model: User, as: "barber", attributes: ["id", "name"] },
+        {
+          model: Service,
+          as: "service",
+          attributes: ["id", "name", "duration", "price"],
+        },
+        {
+          model: Payment,
+          as: "payment",
+          where: {
+            [Op.not]: {
+              status: "rejected",
+            },
+          },
+          attributes: ["id", "method", "status"],
+        },
+      ],
+      order: [
+        ["date", "DESC"],
+        ["time", "DESC"],
+      ],
+      // where: id,
+    });
+    res.json(reservations);
+  } catch (err) {
+    console.error(err);
+    res
+      .status(500)
+      .json({ message: "Gagal mengambil data reservasi in barber" });
   }
 };
 
@@ -215,6 +326,10 @@ export const createReservation = async (req, res) => {
       });
     }
 
+    // 🔥 TENTUKAN STATUS BERDASARKAN TANGGAL
+    const today = new Date().toISOString().split("T")[0];
+    const status = date > today ? "pre_booked" : "pending";
+
     // simpan reservasi baru
     const newReservation = await Reservation.create({
       customer_id: user.id,
@@ -222,7 +337,7 @@ export const createReservation = async (req, res) => {
       service_id,
       date,
       time,
-      status: "pending",
+      status: status,
       note,
     });
 
@@ -231,6 +346,21 @@ export const createReservation = async (req, res) => {
       amount: service.price,
       method: payment_method,
     });
+
+    if (status) {
+      const reservationWithDetails = await Reservation.findByPk(
+        newReservation.id,
+        {
+          include: [
+            { model: User, as: "customer", attributes: ["id", "name"] },
+            { model: User, as: "barber", attributes: ["id", "name"] },
+            { model: Service, as: "service", attributes: ["name"] },
+          ],
+        }
+      );
+
+      await notifyAdminNewReservation(reservationWithDetails);
+    }
 
     res.status(201).json(newReservation);
   } catch (err) {
@@ -262,6 +392,13 @@ export const updateReservationStatus = async (req, res) => {
 
     reservation.status = status;
     await reservation.save();
+
+    if (status == "confirmed") {
+      notifyReservationAccepted(reservation);
+    }
+    if (status == "cancelled") {
+      notifyReservationRejected(reservation, "Pembayaran anda tidak valid");
+    }
 
     res.json({ message: "Status reservasi berhasil diperbarui." });
   } catch (err) {
@@ -365,7 +502,10 @@ export const getAvailableBarbers = async (req, res) => {
     const endNew = new Date(startNew.getTime() + duration * 60000);
 
     const barbers = await User.findAll({
-      where: { role: "barber" },
+      where: {
+        role: "barber",
+        is_present: true, // ← HANYA barber yang hadir hari ini
+      },
       include: [
         {
           model: Reservation,

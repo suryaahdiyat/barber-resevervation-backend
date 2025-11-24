@@ -1,4 +1,5 @@
 import { Payment, Reservation, User, Service } from "../../models/index.js";
+import { checkPaymentDeadline } from "../utils/checkPaymentDeadline.js";
 import fs from "fs";
 import path from "path";
 /**
@@ -121,7 +122,7 @@ export const getPaymentByReservationId = async (req, res) => {
             {
               model: User,
               as: "customer",
-              attributes: ["id", "name", "phone"],
+              attributes: ["id", "name", "phone", "email"],
             },
             {
               model: Service,
@@ -137,14 +138,43 @@ export const getPaymentByReservationId = async (req, res) => {
       return res.status(404).json({ message: "Pembayaran tidak ditemukan" });
     }
 
-    res.json(payment);
+    // Jalankan pengecekan deadline untuk payment yang terkait
+    if (payment) {
+      await checkPaymentDeadline(payment);
+    }
+
+    // // Return hasilnya (dengan status yang sudah diperbarui)
+    const paymentUpdated = await Payment.findOne({
+      where: { reservation_id: id },
+      include: [
+        {
+          model: Reservation,
+          as: "reservation",
+          include: [
+            {
+              model: User,
+              as: "customer",
+              attributes: ["id", "name", "phone", "email", "role"],
+            },
+            {
+              model: Service,
+              as: "service",
+              attributes: ["id", "name", "price"],
+            },
+          ],
+        },
+      ],
+    });
+    res.json(paymentUpdated);
+
+    // res.json(payment);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Gagal mengambil detail pembayaran" });
   }
 };
 
-export const updatePaymentByAdmin = async (req, res) => {
+export const updatePaymentByBoth = async (req, res) => {
   try {
     // const { id } = req.params;
     const { payment_method } = req.body;
@@ -199,7 +229,7 @@ export const updatePaymentStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    if (!["accepted", "rejected"].includes(status)) {
+    if (!["waiting", "accepted", "rejected", "refunded"].includes(status)) {
       return res.status(400).json({ message: "Status tidak valid" });
     }
 

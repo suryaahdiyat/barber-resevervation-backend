@@ -3,11 +3,13 @@ import UserModel from "./User.js";
 import ServiceModel from "./Service.js";
 import ReservationModel from "./Reservation.js";
 import PaymentModel from "./Payment.js";
+import NotificationModel from "./Notification.js";
 
 const User = UserModel(sequelize);
 const Service = ServiceModel(sequelize);
 const Reservation = ReservationModel(sequelize);
 const Payment = PaymentModel(sequelize);
+const Notification = NotificationModel(sequelize);
 
 // 💈 Relasi antar model
 User.hasMany(Reservation, {
@@ -45,4 +47,15 @@ Payment.belongsTo(Reservation, {
   foreignKey: "reservation_id",
   as: "reservation",
 });
-export { sequelize, User, Service, Reservation, Payment };
+
+// ✅ TAMBAH RELASI BARU: User ↔ Notification
+User.hasMany(Notification, {
+  foreignKey: "user_id",
+  as: "notifications",
+});
+Notification.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "user",
+});
+
+export { sequelize, User, Service, Reservation, Payment, Notification };

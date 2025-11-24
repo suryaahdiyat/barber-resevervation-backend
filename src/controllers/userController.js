@@ -1,7 +1,7 @@
 // controllers/userController.js
 import bcrypt from "bcrypt";
 import { Op, where } from "sequelize";
-import { User, Reservation, Service } from "../../models/index.js";
+import { User, Reservation, Service, Payment } from "../../models/index.js";
 
 // 🔹 Ambil semua user
 export const getAllUsers = async (req, res) => {
@@ -35,9 +35,18 @@ export const getAllUsersCA = async (req, res) => {
 
 export const getAllBarbers = async (req, res) => {
   try {
+    const { is_present } = req.query; // Optional filter
+
+    const whereCondition = { role: "barber" };
+    if (is_present !== undefined) {
+      whereCondition.is_present = is_present === "true";
+    }
+
+    whereCondition.role = "barber";
+
     const barbers = await User.findAll({
-      attributes: ["id", "name", "email", "phone", "role"],
-      where: { role: "barber" },
+      attributes: ["id", "name", "email", "phone", "is_present"],
+      where: whereCondition,
       order: [["id", "DESC"]],
     });
     res.json(barbers);
@@ -73,18 +82,26 @@ export const getAllCustomers = async (req, res) => {
 export const getUserById = async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id, {
+      // where: customerid == req.params.id,
       attributes: ["id", "name", "email", "phone", "role"],
       include: [
         {
           model: Reservation,
           as: "customer_reservations",
+          // where: reservationWhere,
           attributes: ["id", "date", "time", "status"],
+          // require: false,
           include: [
             {
               model: Service,
               as: "service",
               attributes: ["name"],
             },
+            // {
+            //   model: Payment,
+            //   as: "payment",
+            //   where: paymentWhere,
+            // },
           ],
         },
       ],
@@ -230,6 +247,43 @@ export const updateUser = async (req, res) => {
   }
 };
 
+export const updatePassword = async (req, res) => {
+  try {
+    const { current_password, new_password, confirm_password, id } = req.body;
+
+    if (!current_password || !new_password || !confirm_password || !id) {
+      return res.status(400).json({ message: "Semua field wajib diisi." });
+    }
+
+    if (new_password !== confirm_password) {
+      return res
+        .status(400)
+        .json({ message: "Konfirmasi password tidak cocok." });
+    }
+
+    const user = await User.findByPk(id);
+    if (!user)
+      return res.status(404).json({ message: "User tidak ditemukan." });
+
+    // ✅ Cek password lama
+    const isMatch = await bcrypt.compare(current_password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Password lama salah." });
+    }
+
+    // ✅ Hash password baru
+    const hashedPassword = await bcrypt.hash(new_password, 10);
+
+    await user.update({ password: hashedPassword });
+
+    return res.json({ message: "Password berhasil diperbarui." });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ message: "Gagal mengubah password.", error: err.message });
+  }
+};
+
 // 🔹 Hapus user
 export const deleteUser = async (req, res) => {
   try {
@@ -242,6 +296,59 @@ export const deleteUser = async (req, res) => {
     res
       .status(500)
       .json({ message: "Gagal menghapus user", error: err.message });
+  }
+};
+
+// 🔹 Update barber presence status
+export const updateBarberPresence = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_present } = req.body;
+
+    const barber = await User.findOne({
+      where: {
+        id,
+        role: "barber",
+      },
+    });
+
+    if (!barber) {
+      return res.status(404).json({ message: "Barber tidak ditemukan" });
+    }
+
+    await barber.update({ is_present });
+
+    res.json({
+      message: "Status kehadiran berhasil diperbarui",
+      barber: {
+        id: barber.id,
+        name: barber.name,
+        is_present: barber.is_present,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Gagal memperbarui status kehadiran",
+      error: err.message,
+    });
+  }
+};
+
+// 🔹 Get all barbers with presence status
+export const getBarbersWithPresence = async (req, res) => {
+  try {
+    const barbers = await User.findAll({
+      attributes: ["id", "name", "is_present"],
+      where: { role: "barber" },
+      order: [["name", "ASC"]],
+    });
+
+    res.json(barbers);
+  } catch (err) {
+    res.status(500).json({
+      message: "Gagal mengambil data barber",
+      error: err.message,
+    });
   }
 };
 

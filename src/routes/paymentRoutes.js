@@ -5,7 +5,7 @@ import {
   getAllPayments,
   getPaymentById,
   getPaymentByReservationId,
-  updatePaymentByAdmin,
+  updatePaymentByBoth,
   updatePaymentStatus,
   updatePaymentProof,
   deletePayment,
@@ -18,7 +18,7 @@ router.post("/", createPayment);
 router.get("/", getAllPayments);
 router.get("/:id", getPaymentById);
 router.get("/by-reservation/:id", getPaymentByReservationId);
-router.put("/:id/by-admin", upload.single("proof"), updatePaymentByAdmin);
+router.put("/:id/status-proof", upload.single("proof"), updatePaymentByBoth);
 router.patch("/:id/status", updatePaymentStatus);
 router.patch("/:id/proof", updatePaymentProof);
 router.delete("/:id/", deletePayment);
