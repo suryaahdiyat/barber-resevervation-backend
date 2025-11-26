@@ -35,6 +35,7 @@ export const createNotification = async (
  */
 export const notifyReservationAccepted = async (reservation) => {
   const customerId = reservation.customer_id;
+  // console.log(reservation);
 
   return await createNotification(
     customerId,
@@ -44,7 +45,7 @@ export const notifyReservationAccepted = async (reservation) => {
     {
       entity: "reservation",
       entityId: reservation.id,
-      actionUrl: `/reservations/${reservation.id}`,
+      actionUrl: `/my-reservation/detail/payment/${reservation.id}`,
     }
   );
 };
@@ -60,7 +61,7 @@ export const notifyReservationRejected = async (reservation, reason) => {
     {
       entity: "reservation",
       entityId: reservation.id,
-      actionUrl: `/reservations/${reservation.id}`,
+      actionUrl: `/my-reservation/detail/payment/${reservation.id}`,
     }
   );
 };
@@ -80,10 +81,26 @@ export const notifyAdminRefundRequired = async (reservation) => {
       {
         entity: "payment",
         entityId: reservation.payment.id,
-        actionUrl: `/admin/payments/${reservation.payment.id}`,
+        actionUrl: `/admin/reservations/${reservation.payment.id}/payment`,
       }
     );
   }
+};
+
+export const notifyUserWillRefund = async (reservation) => {
+  // const adminUsers = await User.findAll({ where: { role: "admin" } });
+  const customerId = reservation.customer_id;
+  return await createNotification(
+    customerId,
+    "Reservasi anda💰 Refund",
+    `Reservasi #${reservation.id} dibatalkan. Silakan proses refund sebesar Rp ${reservation.payment.amount}`,
+    "warning",
+    {
+      entity: "payment",
+      entityId: reservation.payment.id,
+      actionUrl: `/admin/reservations/${reservation.payment.id}/payment`,
+    }
+  );
 };
 
 /**
@@ -130,19 +147,19 @@ export const notifyBarberReplaced = async (
 export const notifyAdminNewReservation = async (reservation) => {
   const adminUsers = await User.findAll({ where: { role: "admin" } });
 
-  const reservationType =
-    reservation.status === "pre_booked" ? "Pre-booked" : "Same-day";
+  // const reservationType =
+  // reservation.status === "pre_booked" ? "Pre-booked" : "Same-day";
 
   for (const admin of adminUsers) {
     await createNotification(
       admin.id,
       "📅 Reservasi Baru",
-      `${reservationType} reservasi dari ${reservation.customer.name} untuk ${reservation.date} dengan ${reservation.barber.name}`,
+      `reservasi dari ${reservation.customer.name} untuk ${reservation.date} dengan ${reservation.barber.name}`,
       "info",
       {
         entity: "reservation",
         entityId: reservation.id,
-        actionUrl: `/admin/reservations/${reservation.id}`,
+        actionUrl: `/admin/reservations/${reservation.id}/payment`,
       }
     );
   }

@@ -1,7 +1,10 @@
 // utils/dailyBarberCheck.js
 import { Reservation, User, Service, Payment } from "../../models/index.js";
 import { Op } from "sequelize";
-import { notifyAdminRefundRequired } from "../utils/notificationHelper.js";
+import {
+  notifyAdminRefundRequired,
+  notifyCustomerCancelled,
+} from "../utils/notificationHelper.js";
 
 export async function checkAndReassignBarbers() {
   try {
@@ -84,6 +87,7 @@ export async function checkAndReassignBarbers() {
 
           // 8. TODO: Kirim alert ke admin
           notifyAdminRefundRequired(reservation);
+          notifyCustomerCancelled(reservation);
           // console.log(reservation);
         }
       } else {
