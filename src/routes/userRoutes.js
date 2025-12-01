@@ -8,6 +8,7 @@ import {
   getUserById,
   searchUser,
   getBarbersWithPresence,
+  getBarberWithPresenceById,
   updateBarberPresence,
   createUser,
   updateUser,
@@ -25,6 +26,7 @@ router.get("/barbers", getAllBarbers);
 router.get("/customers", getAllCustomers);
 router.get("/search", searchUser);
 router.get("/barbers/presence", getBarbersWithPresence);
+router.get("/barber/presence/:id", getBarberWithPresenceById);
 router.patch("/barbers/:id/presence", updateBarberPresence);
 router.get("/:id", getUserById);
 router.post("/", createUser);

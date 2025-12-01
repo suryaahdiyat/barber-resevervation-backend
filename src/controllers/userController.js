@@ -352,6 +352,27 @@ export const getBarbersWithPresence = async (req, res) => {
   }
 };
 
+// 🔹 Get barber with presence status by id
+export const getBarberWithPresenceById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const barbers = await User.findOne({
+      attributes: ["id", "name", "is_present"],
+      where: {
+        id,
+        role: "barber",
+      },
+    });
+
+    res.json(barbers);
+  } catch (err) {
+    res.status(500).json({
+      message: "Gagal mengambil data barber",
+      error: err.message,
+    });
+  }
+};
+
 // 🔹 Login sederhana
 export const loginUser = async (req, res) => {
   try {
