@@ -8,7 +8,7 @@ export const getAllUsers = async (req, res) => {
   try {
     const users = await User.findAll({
       attributes: ["id", "name", "email", "phone", "role"],
-      order: [["id", "DESC"]],
+      order: [["name", "ASC"]],
     });
     res.json(users);
   } catch (err) {
@@ -23,7 +23,7 @@ export const getAllUsersCA = async (req, res) => {
     const users = await User.findAll({
       attributes: ["id", "name", "email", "phone", "role"],
       where: { role: { [Op.or]: ["admin", "cashier"] } },
-      order: [["id", "DESC"]],
+      order: [["name", "ASC"]],
     });
     res.json(users);
   } catch (err) {
@@ -47,7 +47,7 @@ export const getAllBarbers = async (req, res) => {
     const barbers = await User.findAll({
       attributes: ["id", "name", "email", "phone", "is_present"],
       where: whereCondition,
-      order: [["id", "DESC"]],
+      order: [["name", "ASC"]],
     });
     res.json(barbers);
   } catch (err) {
